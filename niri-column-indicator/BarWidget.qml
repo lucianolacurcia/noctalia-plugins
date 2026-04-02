@@ -5,6 +5,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Widgets
 import qs.Services.UI
+import qs.Services.Compositor
 
 Item {
     id: root
@@ -18,58 +19,78 @@ Item {
 
     property int currentColumn: 0
     property int totalColumns: 0
+    property int focusedWorkspaceIdx: 0
 
     property string barPosition: Settings.data.bar.position || "top"
     property bool barIsVertical: barPosition === "left" || barPosition === "right"
     readonly property real capsuleHeight: Style.getCapsuleHeightForScreen(screen?.name)
-    readonly property real pillFixedDim: Style.toOdd(capsuleHeight * 0.8)
+    readonly property real pillDim: Style.toOdd(capsuleHeight * 0.8)
 
-    implicitWidth: barIsVertical ? capsuleHeight : pillRow.implicitWidth + Style.marginS * 2
-    implicitHeight: barIsVertical ? pillRow.implicitHeight + Style.marginS * 2 : capsuleHeight
+    implicitWidth: barIsVertical ? capsuleHeight : contentRow.implicitWidth + Style.marginS * 2
+    implicitHeight: barIsVertical ? contentRow.implicitHeight + Style.marginS * 2 : capsuleHeight
 
-    // Container capsule
     Rectangle {
         id: container
         x: Style.pixelAlignCenter(parent.width, width)
         y: Style.pixelAlignCenter(parent.height, height)
-        width: barIsVertical ? capsuleHeight : pillRow.implicitWidth + Style.marginS * 2
-        height: barIsVertical ? pillRow.implicitHeight + Style.marginS * 2 : capsuleHeight
+        width: barIsVertical ? capsuleHeight : contentRow.implicitWidth + Style.marginS * 2
+        height: barIsVertical ? contentRow.implicitHeight + Style.marginS * 2 : capsuleHeight
         color: Style.capsuleColor
         radius: Style.radiusM
         border.color: Style.capsuleBorderColor
         border.width: Style.capsuleBorderWidth
 
         Behavior on width {
-            NumberAnimation {
-                duration: Style.animationNormal
-                easing.type: Easing.OutBack
-            }
-        }
-        Behavior on height {
-            NumberAnimation {
-                duration: Style.animationNormal
-                easing.type: Easing.OutBack
-            }
+            NumberAnimation { duration: Style.animationNormal; easing.type: Easing.OutBack }
         }
 
         Row {
-            id: pillRow
+            id: contentRow
             anchors.centerIn: parent
             spacing: Style.marginXS
 
+            // Workspace indicator
+            Rectangle {
+                id: wsPill
+                width: pillDim * 1.4
+                height: pillDim
+                radius: Style.radiusM
+                color: Color.mTertiary
+
+                NText {
+                    anchors.centerIn: parent
+                    text: root.focusedWorkspaceIdx > 0 ? root.focusedWorkspaceIdx.toString() : "-"
+                    family: Settings.data.ui.fontFixed
+                    pointSize: pillDim * 0.45
+                    applyUiScale: false
+                    font.weight: Font.Bold
+                    color: Color.mOnTertiary
+                }
+            }
+
+            // Separator
+            Rectangle {
+                width: 1
+                height: pillDim * 0.6
+                anchors.verticalCenter: parent.verticalCenter
+                color: Qt.alpha(Color.mOnSurfaceVariant, 0.3)
+                visible: root.totalColumns > 0
+            }
+
+            // Column pills
             Repeater {
                 model: root.totalColumns
 
                 Rectangle {
-                    id: pill
+                    id: colPill
                     readonly property bool isCurrent: (index + 1) === root.currentColumn
 
-                    width: isCurrent ? pillFixedDim * 1.8 : pillFixedDim
-                    height: pillFixedDim
-                    radius: Style.radiusM
+                    width: isCurrent ? pillDim * 1.6 : pillDim * 0.7
+                    height: pillDim
+                    radius: Style.radiusS
 
                     color: {
-                        if (pillMouse.containsMouse)
+                        if (colMouse.containsMouse)
                             return Color.mHover;
                         if (isCurrent)
                             return Color.mPrimary;
@@ -77,52 +98,46 @@ Item {
                     }
 
                     Behavior on width {
-                        NumberAnimation {
-                            duration: Style.animationNormal
-                            easing.type: Easing.OutBack
-                        }
+                        NumberAnimation { duration: Style.animationNormal; easing.type: Easing.OutBack }
                     }
                     Behavior on color {
                         enabled: !Color.isTransitioning
-                        ColorAnimation {
-                            duration: Style.animationFast
-                            easing.type: Easing.InOutQuad
-                        }
+                        ColorAnimation { duration: Style.animationFast; easing.type: Easing.InOutQuad }
+                    }
+                    Behavior on opacity {
+                        NumberAnimation { duration: Style.animationFast; easing.type: Easing.InOutCubic }
                     }
 
+                    // Column number (only on active pill)
                     NText {
                         anchors.centerIn: parent
                         text: (index + 1).toString()
                         family: Settings.data.ui.fontFixed
-                        pointSize: pillFixedDim * 0.45
+                        pointSize: pillDim * 0.38
                         applyUiScale: false
                         font.weight: Font.Bold
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                        opacity: colPill.isCurrent ? 1.0 : 0.0
                         color: {
-                            if (pillMouse.containsMouse)
+                            if (colMouse.containsMouse)
                                 return Color.mOnHover;
-                            if (pill.isCurrent)
-                                return Color.mOnPrimary;
-                            return Color.mOnSurfaceVariant;
+                            return Color.mOnPrimary;
                         }
 
+                        Behavior on opacity {
+                            NumberAnimation { duration: Style.animationFast; easing.type: Easing.InOutQuad }
+                        }
                         Behavior on color {
                             enabled: !Color.isTransitioning
-                            ColorAnimation {
-                                duration: Style.animationFast
-                                easing.type: Easing.InOutQuad
-                            }
+                            ColorAnimation { duration: Style.animationFast; easing.type: Easing.InOutQuad }
                         }
                     }
 
                     MouseArea {
-                        id: pillMouse
+                        id: colMouse
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            // Focus this column by navigating left/right
                             var diff = (index + 1) - root.currentColumn;
                             var action = diff > 0 ? "focus-column-right" : "focus-column-left";
                             for (var i = 0; i < Math.abs(diff); i++) {
@@ -142,22 +157,18 @@ Item {
         running: true
 
         stdout: SplitParser {
-            onRead: data => {
-                root.parseEvent(data);
-            }
+            onRead: data => root.parseEvent(data)
         }
     }
 
-    // Refresh on window close
+    // One-shot window refresh
     Process {
         id: refreshWindows
         command: ["sh", "-c", "niri msg -j windows"]
         running: false
 
         stdout: SplitParser {
-            onRead: data => {
-                root.parseWindowList(data);
-            }
+            onRead: data => root.parseWindowList(data)
         }
     }
 
@@ -167,14 +178,17 @@ Item {
 
             if (event.WindowOpenedOrChanged) {
                 var win = event.WindowOpenedOrChanged.window;
-                if (win.is_focused && win.layout && win.layout.pos_in_scrolling_layout) {
-                    root.currentColumn = win.layout.pos_in_scrolling_layout[0];
-                    root.totalColumns = win.layout.pos_in_scrolling_layout[1];
+                if (win.is_focused) {
+                    updateFromFocusedWindow(win);
                 }
+                // Total columns might have changed, refresh all
+                refreshWindows.running = true;
             } else if (event.WindowsChanged) {
-                parseWindowArray(event.WindowsChanged.windows);
+                updateFromWindowArray(event.WindowsChanged.windows);
             } else if (event.WindowClosed) {
                 refreshWindows.running = true;
+            } else if (event.WorkspacesChanged) {
+                updateWorkspace(event.WorkspacesChanged.workspaces);
             }
         } catch (e) {}
     }
@@ -182,23 +196,55 @@ Item {
     function parseWindowList(data) {
         try {
             var windows = JSON.parse(data);
-            parseWindowArray(windows);
+            updateFromWindowArray(windows);
         } catch (e) {}
     }
 
-    function parseWindowArray(windows) {
-        var found = false;
+    function updateFromFocusedWindow(win) {
+        if (win.layout && win.layout.pos_in_scrolling_layout) {
+            root.currentColumn = win.layout.pos_in_scrolling_layout[0];
+        }
+    }
+
+    function updateFromWindowArray(windows) {
+        var focusedCol = 0;
+        var focusedWsId = -1;
+        var maxCol = 0;
+
         for (var i = 0; i < windows.length; i++) {
-            if (windows[i].is_focused && windows[i].layout && windows[i].layout.pos_in_scrolling_layout) {
-                root.currentColumn = windows[i].layout.pos_in_scrolling_layout[0];
-                root.totalColumns = windows[i].layout.pos_in_scrolling_layout[1];
-                found = true;
-                break;
+            var win = windows[i];
+            if (win.is_focused && win.layout && win.layout.pos_in_scrolling_layout) {
+                focusedCol = win.layout.pos_in_scrolling_layout[0];
+                focusedWsId = win.workspace_id;
             }
         }
-        if (!found) {
-            root.currentColumn = 0;
+
+        // Count total columns in the focused workspace
+        if (focusedWsId >= 0) {
+            for (var j = 0; j < windows.length; j++) {
+                if (windows[j].workspace_id === focusedWsId &&
+                    !windows[j].is_floating &&
+                    windows[j].layout && windows[j].layout.pos_in_scrolling_layout) {
+                    var col = windows[j].layout.pos_in_scrolling_layout[0];
+                    if (col > maxCol) maxCol = col;
+                }
+            }
+        }
+
+        root.currentColumn = focusedCol;
+        root.totalColumns = maxCol;
+
+        if (focusedCol === 0 && maxCol === 0) {
             root.totalColumns = 0;
+        }
+    }
+
+    function updateWorkspace(workspaces) {
+        for (var i = 0; i < workspaces.length; i++) {
+            if (workspaces[i].is_focused) {
+                root.focusedWorkspaceIdx = workspaces[i].idx;
+                break;
+            }
         }
     }
 
