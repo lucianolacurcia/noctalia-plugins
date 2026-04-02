@@ -162,7 +162,7 @@ Item {
                     id: colPill
                     readonly property bool isCurrent: (index + 1) === root.currentColumn
 
-                    width: isCurrent ? pillDim * 1.6 : pillDim * 0.7
+                    width: isCurrent ? pillDim * 1.6 : pillDim
                     height: pillDim
                     radius: Style.radiusS
 
@@ -171,7 +171,7 @@ Item {
                             return Color.mHover;
                         if (isCurrent)
                             return Color.mPrimary;
-                        return Qt.alpha(Color.mSurfaceVariant, 0.3);
+                        return Qt.alpha(Color.mSurfaceVariant, 0.6);
                     }
 
                     Behavior on width {
@@ -189,11 +189,13 @@ Item {
                         pointSize: pillDim * 0.38
                         applyUiScale: false
                         font.weight: Font.Bold
-                        opacity: colPill.isCurrent ? 1.0 : 0.0
+                        opacity: 1.0
                         color: {
                             if (colMouse.containsMouse)
                                 return Color.mOnHover;
-                            return Color.mOnPrimary;
+                            if (colPill.isCurrent)
+                                return Color.mOnPrimary;
+                            return Color.mOnSurfaceVariant;
                         }
 
                         Behavior on opacity {
