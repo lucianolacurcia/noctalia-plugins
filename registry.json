@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "id": "niri-column-indicator",
+      "name": "Niri Column Indicator",
+      "version": "1.0.0",
+      "official": false,
+      "author": "Luciano Lacurcia",
+      "description": "Shows the current column index in niri's scrolling layout",
+      "repository": "https://github.com/lucianolacurcia/noctalia-plugins",
+      "minNoctaliaVersion": "3.6.0",
+      "license": "MIT",
+      "tags": [
+        "Bar",
+        "Indicator",
+        "Niri"
+      ],
+      "lastUpdated": "2026-04-02T00:00:00-03:00"
+    }
+  ]
+}

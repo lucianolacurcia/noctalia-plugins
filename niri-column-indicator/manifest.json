@@ -1,0 +1,22 @@
+{
+  "id": "niri-column-indicator",
+  "name": "Niri Column Indicator",
+  "version": "1.0.0",
+  "minNoctaliaVersion": "3.6.0",
+  "author": "Luciano Lacurcia",
+  "license": "MIT",
+  "description": "Shows the current column index in niri's scrolling layout",
+  "tags": ["Bar", "Indicator", "Niri"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "dependencies": {
+    "plugins": []
+  },
+  "metadata": {
+    "defaultSettings": {
+      "colorText": "mOnSurfaceVariant",
+      "colorActive": "mPrimary"
+    }
+  }
+}
