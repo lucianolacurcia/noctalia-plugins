@@ -29,6 +29,84 @@ Item {
     implicitWidth: barIsVertical ? capsuleHeight : contentRow.implicitWidth + Style.marginS * 2
     implicitHeight: barIsVertical ? contentRow.implicitHeight + Style.marginS * 2 : capsuleHeight
 
+    // Listen to CompositorService signals to trigger refresh
+    Connections {
+        target: CompositorService
+        function onWorkspacesChanged() {
+            root.scheduleRefresh();
+        }
+        function onWindowListChanged() {
+            root.scheduleRefresh();
+        }
+        function onActiveWindowChanged() {
+            root.scheduleRefresh();
+        }
+    }
+
+    function scheduleRefresh() {
+        refreshDebounce.restart();
+    }
+
+    Timer {
+        id: refreshDebounce
+        interval: 50
+        repeat: false
+        onTriggered: {
+            updateWorkspaceFromCompositor();
+            fetchProc.running = true;
+        }
+    }
+
+    function updateWorkspaceFromCompositor() {
+        for (var i = 0; i < CompositorService.workspaces.count; i++) {
+            var ws = CompositorService.workspaces.get(i);
+            if (ws.isFocused) {
+                root.focusedWorkspaceIdx = ws.idx;
+                break;
+            }
+        }
+    }
+
+    // Fetch column data from niri
+    Process {
+        id: fetchProc
+        command: ["niri", "msg", "-j", "windows"]
+        running: false
+
+        stdout: SplitParser {
+            onRead: data => {
+                try {
+                    var windows = JSON.parse(data);
+                    var focusedCol = 0;
+                    var focusedWsId = -1;
+                    var maxCol = 0;
+
+                    for (var i = 0; i < windows.length; i++) {
+                        var win = windows[i];
+                        if (win.is_focused && !win.is_floating && win.layout && win.layout.pos_in_scrolling_layout) {
+                            focusedCol = win.layout.pos_in_scrolling_layout[0];
+                            focusedWsId = win.workspace_id;
+                        }
+                    }
+
+                    if (focusedWsId >= 0) {
+                        for (var j = 0; j < windows.length; j++) {
+                            if (windows[j].workspace_id === focusedWsId &&
+                                !windows[j].is_floating &&
+                                windows[j].layout && windows[j].layout.pos_in_scrolling_layout) {
+                                var col = windows[j].layout.pos_in_scrolling_layout[0];
+                                if (col > maxCol) maxCol = col;
+                            }
+                        }
+                    }
+
+                    root.currentColumn = focusedCol;
+                    root.totalColumns = maxCol;
+                } catch (e) {}
+            }
+        }
+    }
+
     Rectangle {
         id: container
         x: Style.pixelAlignCenter(parent.width, width)
@@ -49,9 +127,8 @@ Item {
             anchors.centerIn: parent
             spacing: Style.marginXS
 
-            // Workspace indicator
+            // Workspace pill
             Rectangle {
-                id: wsPill
                 width: pillDim * 1.4
                 height: pillDim
                 radius: Style.radiusM
@@ -104,11 +181,7 @@ Item {
                         enabled: !Color.isTransitioning
                         ColorAnimation { duration: Style.animationFast; easing.type: Easing.InOutQuad }
                     }
-                    Behavior on opacity {
-                        NumberAnimation { duration: Style.animationFast; easing.type: Easing.InOutCubic }
-                    }
 
-                    // Column number (only on active pill)
                     NText {
                         anchors.centerIn: parent
                         text: (index + 1).toString()
@@ -125,10 +198,6 @@ Item {
 
                         Behavior on opacity {
                             NumberAnimation { duration: Style.animationFast; easing.type: Easing.InOutQuad }
-                        }
-                        Behavior on color {
-                            enabled: !Color.isTransitioning
-                            ColorAnimation { duration: Style.animationFast; easing.type: Easing.InOutQuad }
                         }
                     }
 
@@ -150,105 +219,8 @@ Item {
         }
     }
 
-    // Event stream listener
-    Process {
-        id: eventStream
-        command: ["sh", "-c", "niri msg -j event-stream"]
-        running: true
-
-        stdout: SplitParser {
-            onRead: data => root.parseEvent(data)
-        }
-    }
-
-    // One-shot window refresh
-    Process {
-        id: refreshWindows
-        command: ["sh", "-c", "niri msg -j windows"]
-        running: false
-
-        stdout: SplitParser {
-            onRead: data => root.parseWindowList(data)
-        }
-    }
-
-    function parseEvent(data) {
-        try {
-            var event = JSON.parse(data);
-
-            if (event.WindowOpenedOrChanged) {
-                var win = event.WindowOpenedOrChanged.window;
-                if (win.is_focused) {
-                    updateFromFocusedWindow(win);
-                }
-                // Total columns might have changed, refresh all
-                refreshWindows.running = true;
-            } else if (event.WindowsChanged) {
-                updateFromWindowArray(event.WindowsChanged.windows);
-            } else if (event.WindowClosed) {
-                refreshWindows.running = true;
-            } else if (event.WorkspacesChanged) {
-                updateWorkspace(event.WorkspacesChanged.workspaces);
-            }
-        } catch (e) {}
-    }
-
-    function parseWindowList(data) {
-        try {
-            var windows = JSON.parse(data);
-            updateFromWindowArray(windows);
-        } catch (e) {}
-    }
-
-    function updateFromFocusedWindow(win) {
-        if (win.layout && win.layout.pos_in_scrolling_layout) {
-            root.currentColumn = win.layout.pos_in_scrolling_layout[0];
-        }
-    }
-
-    function updateFromWindowArray(windows) {
-        var focusedCol = 0;
-        var focusedWsId = -1;
-        var maxCol = 0;
-
-        for (var i = 0; i < windows.length; i++) {
-            var win = windows[i];
-            if (win.is_focused && win.layout && win.layout.pos_in_scrolling_layout) {
-                focusedCol = win.layout.pos_in_scrolling_layout[0];
-                focusedWsId = win.workspace_id;
-            }
-        }
-
-        // Count total columns in the focused workspace
-        if (focusedWsId >= 0) {
-            for (var j = 0; j < windows.length; j++) {
-                if (windows[j].workspace_id === focusedWsId &&
-                    !windows[j].is_floating &&
-                    windows[j].layout && windows[j].layout.pos_in_scrolling_layout) {
-                    var col = windows[j].layout.pos_in_scrolling_layout[0];
-                    if (col > maxCol) maxCol = col;
-                }
-            }
-        }
-
-        root.currentColumn = focusedCol;
-        root.totalColumns = maxCol;
-
-        if (focusedCol === 0 && maxCol === 0) {
-            root.totalColumns = 0;
-        }
-    }
-
-    function updateWorkspace(workspaces) {
-        for (var i = 0; i < workspaces.length; i++) {
-            if (workspaces[i].is_focused) {
-                root.focusedWorkspaceIdx = workspaces[i].idx;
-                break;
-            }
-        }
-    }
-
     Component.onCompleted: {
-        refreshWindows.running = true;
+        updateWorkspaceFromCompositor();
+        fetchProc.running = true;
     }
 }
